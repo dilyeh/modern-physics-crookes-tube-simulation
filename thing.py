@@ -1,5 +1,6 @@
 import vpython as vp
 import math
+import random
 
 K = 9e9 # Nm^2/C
 
@@ -14,7 +15,13 @@ class Electron:
                 color=vp.color.yellow)
 
     def tick(self, tickspeed, charged_objects):
+        # get force
+        electric_field = find_electric_field(self.object.pos, charged_objects)
+        force = self.charge * electric_field
+        accel = force / self.mass
+
         # update position
+        self.velocity += accel * tickspeed
         self.object.pos += self.velocity * tickspeed
 
 
@@ -53,20 +60,39 @@ def find_electric_field(pos, charged_objects):
     return electric_field
 
 
+
 def main():
-    tickspeed = 0.1
-    electron = Electron(vp.vec(1,0,0))
-    anode = Electrode(pos=vp.vec(10,0,0), charge=1e-8, color=vp.color.red)
     cathode = Electrode(pos = vp.vec(0,0,0), charge=0, color=vp.color.blue)
 
-    electron2 = Electron(vp.vec(4,1,0))
-    
-    anode_ef = find_electric_field(electron.object.pos, [anode, cathode])
-    anode_ef2 = find_electric_field(electron2.object.pos, [anode, cathode])
-    print(anode_ef)
+    accelerating_anodes = [
+        Electrode(pos=vp.vec(10,0,0), charge=1e-8, color=vp.color.red),
+        Electrode(pos=vp.vec(20,-5,0), charge=1e-8, color=vp.color.red),
+        #Electrode(pos=vp.vec(20,5,0), charge=1e-8, color=vp.color.red),
+    ]
 
-    test1 = vp.arrow(pos=electron.object.pos, axis=anode_ef, opacity=0.5, shaftwidth=0.1)
-    test2 = vp.arrow(pos=electron2.object.pos, axis=anode_ef2, opacity=0.5, shaftwidth=0.1)
+    electrons = [Electron(vp.vec(1,0,0)), Electron(vp.vec(4,1,0))]
+
+    vp.scene.autoscale = False
+    vp.scene.camera.pos = vp.vec(5,0,0)
+    tickspeed = 5e-8
+    tickNum = 0
+    # main loop
+    while True:
+        vp.rate(60)
+        tickNum += 1
+        # create electrons
+        if tickNum > 50:
+            tickNum = 0
+            electrons.append(Electron(vp.vec(1,0,0)))
+
+        # move all the stuff
+        for electron in electrons:
+            electron.tick(tickspeed, accelerating_anodes)
+
+        # delete electrons out of range
+        for electron in electrons:
+            if electron.object.pos.x > 50:
+                del electron
 
 
 
