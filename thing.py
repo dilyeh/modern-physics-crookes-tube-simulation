@@ -4,61 +4,30 @@ import math
 K = 9e9 # Nm^2/C
 
 class Electron:
-    def __init__(self):
+    def __init__(self, pos):
         self.velocity = vp.vec(0.1,0,0) # m/s
         self.charge = 1.6e-19 # C
         self.mass = 9.1e-31 # kg
         self.object = vp.sphere(
-                pos=vp.vec(0,0,0), # m
+                pos=pos, # m
                 radius=0.1, # just for illustrative purposes
                 color=vp.color.yellow)
 
     def tick(self, tickspeed, charged_objects):
-        # find force
-        electric_potential = calculate_electric_potential(pos=self.object.pos, charged_objects=charged_objects)
         # update position
         self.object.pos += self.velocity * tickspeed
 
 
 
 class Electrode:
-    def __init__(self, pos, voltage):
+    def __init__(self, pos, charge, color=vp.vec(0.8,0.8,0.8)):
         self.object = vp.box(
                 pos=pos,
                 length=0.5,
                 height=2,
-                width=2)
-        self.voltage = voltage # V
-
-
-def calculate_electric_potential(pos, charged_objects):
-    # args:     pos (vp.vec)
-    #           charged_objects (list of objects with either charge or voltage)
-    # returns:  electric potential (numeric)
-    voltage = 0;
-    for object in charged_objects:
-        if hasattr(object, 'voltage'):
-            voltage += object.voltage
-        elif hasattr(object, 'charge'):
-            # get distance
-            distance = find_distance(pos, object.object.pos)
-            voltage += (K * object.charge) / distance
-
-    return voltage
-
-def calculate_electric_field(pos, charged_objects):
-    # args:     pos1, pos2 (vp.vec)
-    #           voltage1, voltage2 (numeric)
-    # returns:  electric field (vp.vec)
-    # this is kinda inefficient and probably buggy, but idk how to do this better and still be general
-    # find x component
-    # find y component
-    # find z component
-    # find direction of gradient
-    # 
-
-    return 
-        
+                width=2,
+                color=color)
+        self.charge = charge # C
 
 def find_distance(pos1, pos2):
     distance = math.sqrt(
@@ -68,16 +37,37 @@ def find_distance(pos1, pos2):
     )
     return distance
 
+def find_electric_field(pos, charged_objects):
+    electric_field = vp.vec(0,0,0)
+    for object in charged_objects:
+        distance = find_distance(pos, object.object.pos)
+        mag = (K * object.charge) / (distance ** 2)
+        # oh nooooo turn magnitude into 3 dimensional components NOOOOOOOOOOOO
+        # oh wait just scale the vector lol
+        vec_to_obj = object.object.pos - pos
+        
+        ratio = mag / distance
+        indv_field = vec_to_obj * ratio
+        electric_field += indv_field
+
+    return electric_field
+
 
 def main():
     tickspeed = 0.1
-    electron = Electron()
-    anode = Electrode(pos=vp.vec(10,0,0), voltage=5)
-    cathode = Electrode(pos = vp.vec(0,0,0), voltage=0)
-    # main loop
-    while True:
-        vp.rate(30)
-        electron.tick(tickspeed)
+    electron = Electron(vp.vec(1,0,0))
+    anode = Electrode(pos=vp.vec(10,0,0), charge=1e-8, color=vp.color.red)
+    cathode = Electrode(pos = vp.vec(0,0,0), charge=0, color=vp.color.blue)
+
+    electron2 = Electron(vp.vec(4,1,0))
+    
+    anode_ef = find_electric_field(electron.object.pos, [anode, cathode])
+    anode_ef2 = find_electric_field(electron2.object.pos, [anode, cathode])
+    print(anode_ef)
+
+    test1 = vp.arrow(pos=electron.object.pos, axis=anode_ef, opacity=0.5, shaftwidth=0.1)
+    test2 = vp.arrow(pos=electron2.object.pos, axis=anode_ef2, opacity=0.5, shaftwidth=0.1)
+
 
 
 main()
