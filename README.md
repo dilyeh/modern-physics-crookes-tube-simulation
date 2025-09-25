@@ -18,7 +18,7 @@ git clone https://github.com/dilyeh/modern-physics-crookes-tube-simulation.git
 cd path/to/git/repo
 python3 -m venv .venv
 .venv/bin/activate
-pip install -r /path/to/requirements.txt
+pip install -r requirements.txt
 ```
 
 3. Run `thing.py`
