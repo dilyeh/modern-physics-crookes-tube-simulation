@@ -4,6 +4,9 @@ import random
 
 K = 9e9 # Nm^2/C
 
+MIN_ELECTRODE_CHARGE = 1e-10 # these are kinda arbitrary
+MAX_ELECTRODE_CHARGE = 2e-8
+
 class Electron:
     def __init__(self, pos):
         self.velocity = vp.vec(0.1,0,0) # m/s
@@ -13,24 +16,36 @@ class Electron:
                 pos=pos, # m
                 radius=0.2, # just for illustrative purposes
                 color=vp.color.yellow)
+        self.tick_num = 0
+        self.is_dead = False
+        self.is_moving = True
 
-    def tick(self, tickspeed, charged_objects):
-        # get force
-        electric_field = find_electric_field(self.object.pos, charged_objects)
-        force = self.charge * electric_field
-        accel = force / self.mass
+    def tick(self, charged_objects, tickspeed):
+        if self.is_moving:
+            # get force
+            electric_field = find_electric_field(self.object.pos, charged_objects) # N/C
+            force = self.charge * electric_field # N
+            accel = force / self.mass # m/s^2
 
-        # update position
-        self.velocity += accel * tickspeed
-        self.object.pos += self.velocity * tickspeed
+            # update position
+            self.velocity += accel * tickspeed
+            self.object.pos += self.velocity * tickspeed
 
-        if self.object.pos.x > 20:
-            del self
+        self.tick_num += 1
+        # die
+        if self.tick_num > 500:
+            self.is_dead = True
+            self.die()
+
+
+    # hacky way to "delete" an electron
+    def die(self):
+        self.object.visible = False
 
 
 
 class Electrode:
-    def __init__(self, pos, charge, size, orientation, color=vp.vec(0.8,0.8,0.8)):
+    def __init__(self, pos, charge, size, orientation, color=vp.vec(0.8,0.8,0.8), opacity_override=None):
         display_size = vp.vec(0,0,0)
         if orientation == 'x':
             display_size = vp.vec(0.5, size[0], size[1])
@@ -45,10 +60,16 @@ class Electrode:
                 height=display_size.y,
                 width=display_size.z,
                 color=color,
-                opacity=0.5)
-        self.size = size
+                opacity=opacity_override if opacity_override else (charge - MIN_ELECTRODE_CHARGE) / (MAX_ELECTRODE_CHARGE - MIN_ELECTRODE_CHARGE))
+        self.size = size # (m, m)
         self.orientation = orientation
         self.charge = charge # C
+        self.opacity_override = opacity_override
+
+    def set_charge(self, charge):
+        self.charge = charge
+        if not self.opacity_override:
+            self.object.opacity = (charge - MIN_ELECTRODE_CHARGE) / (MAX_ELECTRODE_CHARGE - MIN_ELECTRODE_CHARGE)
 
 
 def find_distance(pos1, pos2):
@@ -115,7 +136,7 @@ def find_electric_field(pos, charged_objects):
         indv_field = vec_to_obj * ratio
         electric_field += indv_field
 
-    return electric_field
+    return electric_field # N/C
 
 
 
@@ -141,37 +162,67 @@ def main():
         Electrode(pos=vp.vec(30,0,-3), charge=1e-8, size=(2,2), orientation='z', color=vp.color.red),
         Electrode(pos=vp.vec(30,0,3), charge=1e-8, size=(2,2), orientation='z', color=vp.color.red),
 
-        # steering
-        Electrode(pos=vp.vec(35,-8,0), charge=3e-9, size=(2,2), orientation='y', color=vp.color.red),
-        #Electrode(pos=vp.vec(25,5,0), charge=1e-9, size=(2,2), orientation='y', color=vp.color.red),
-        #Electrode(pos=vp.vec(25,0,-5), charge=1e-9, size=(2,2), orientation='z', color=vp.color.red),
-        Electrode(pos=vp.vec(35,0,8), charge=3e-9, size=(2,2), orientation='z', color=vp.color.red),
+
+        # aquadag
+        Electrode(pos=vp.vec(60,0,0), charge=8e-8, size=(20,20), orientation='x', color=vp.color.red, opacity_override=0.1)
     ]
 
+    steering_anodes = [
+        # n
+        Electrode(pos=vp.vec(35,8,0), charge=1e-9, size=(2,2), orientation='y', color=vp.color.red),
+        # s
+        Electrode(pos=vp.vec(35,-8,0), charge=5e-9, size=(2,2), orientation='y', color=vp.color.red),
+        # e
+        Electrode(pos=vp.vec(35,0,-8), charge=1e-9, size=(2,2), orientation='z', color=vp.color.red),
+        # w
+        Electrode(pos=vp.vec(35,0,8), charge=5e-9, size=(2,2), orientation='z', color=vp.color.red),
+    ]
+
+    all_anodes = accelerating_anodes + steering_anodes
+
     electrons = [Electron(vp.vec(1,0,0)), Electron(vp.vec(4,1,0))]
+
+    def set_steer_electrode(event, electrode_num):
+        print(event.value)
+        new_charge = (event.value * (MAX_ELECTRODE_CHARGE - MIN_ELECTRODE_CHARGE)) + MIN_ELECTRODE_CHARGE
+        steering_anodes[electrode_num].set_charge(new_charge) 
+
+    label_n = vp.wtext(text="N")
+    steer_n = vp.slider(bind=lambda event: set_steer_electrode(event, 0), min=0, max=1, length=200)
+
+    label_s = vp.wtext(text="S")
+    steer_s = vp.slider(bind=lambda event: set_steer_electrode(event, 1), min=0, max=1, length=200)
+
+    label_e = vp.wtext(text="E")
+    steer_e = vp.slider(bind=lambda event: set_steer_electrode(event, 2), min=0, max=1, length=200)
+
+    label_w = vp.wtext(text="W")
+    steer_w = vp.slider(bind=lambda event: set_steer_electrode(event, 3), min=0, max=1, length=200)
 
     vp.scene.autoscale = False
     vp.scene.camera.pos = vp.vec(25,0,0)
     tickspeed = 5e-8
-    tickNum = 0
-    screen_distance = 45
+    tick_num = 0
+    screen_distance = 55
     # main loop
     while True:
         vp.rate(60)
-        tickNum += 1
+        tick_num += 1
         # create electrons
-        if tickNum > 30:
-            tickNum = 0
-            electrons.append(Electron(pos=vp.vec(1, (random.random() - 0.5) / 2, (random.random() - 0.5) / 2)))
-            print(len(electrons))
+        if tick_num % 5 == 0:
+            electrons.append(Electron(pos=vp.vec(1, (random.random() - 0.5) / 4, (random.random() - 0.5) / 4)))
 
         # move all the stuff
         for electron in electrons:
-            electron.tick(tickspeed, accelerating_anodes)
+            electron.tick(charged_objects=all_anodes, tickspeed=tickspeed)
 
-        # delete electrons out of range
-        # TODO FORNEXTTIME: why the hell isn't this working???
-        electrons = [electron for electron in electrons if electron.object.pos.x < screen_distance]
+        # stop electrons at the screen
+        for electron in electrons:
+            if electron.object.pos.x >= screen_distance:
+                electron.is_moving = False
+        
+        # delete electrons out of range (this is kinda hacky...)
+        electrons = [electron for electron in electrons if electron.is_dead == False]
 
 
 def test():
